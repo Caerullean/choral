@@ -76,12 +76,12 @@ import picocli.CommandLine.Parameters;
 		}
 )
 public class Choral extends ChoralCommand implements Callable< Integer > {
-
 	public static void main( String[] args) {
 		System.exit( compile(args) );
 	}
 
 	public static int compile( String[] args) {
+		System.out.println("compile was called");
 		CommandLine cl = new CommandLine( new Choral() );
 		cl.setToggleBooleanFlags( true );
 		cl.setCaseInsensitiveEnumValuesAllowed( true );
@@ -162,6 +162,7 @@ public class Choral extends ChoralCommand implements Callable< Integer > {
 
 		@Override
 		public Integer call() {
+			System.out.println("Projector was called");
 			try {
 				Collection< File > sourceFiles = sourcesPathOption.getPaths( true ).stream()
 						.flatMap( wrapFunction( p -> Files.find( p, 999, ( q, a ) -> {
