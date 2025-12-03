@@ -50,6 +50,7 @@ import choral.compiler.Parser;
 import choral.compiler.SourceObject;
 import choral.compiler.SourceWriter;
 import choral.compiler.Typer;
+import choral.compiler.NewTyper;
 import choral.exceptions.AstPositionedException;
 import choral.exceptions.ChoralCompoundException;
 import choral.exceptions.ChoralException;
@@ -81,7 +82,6 @@ public class Choral extends ChoralCommand implements Callable< Integer > {
 	}
 
 	public static int compile( String[] args) {
-		System.out.println("compile was called");
 		CommandLine cl = new CommandLine( new Choral() );
 		cl.setToggleBooleanFlags( true );
 		cl.setCaseInsensitiveEnumValuesAllowed( true );
@@ -162,7 +162,6 @@ public class Choral extends ChoralCommand implements Callable< Integer > {
 
 		@Override
 		public Integer call() {
-			System.out.println("Projector was called");
 			try {
 				Collection< File > sourceFiles = sourcesPathOption.getPaths( true ).stream()
 						.flatMap( wrapFunction( p -> Files.find( p, 999, ( q, a ) -> {
