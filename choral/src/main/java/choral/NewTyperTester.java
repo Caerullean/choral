@@ -11,7 +11,8 @@ public class NewTyperTester {
     public static void main(String[] args) {
         String sourceCode = """
             class Hello@A{
-            
+                String@A msg;
+                String@A letter;
             }""";
         try {
             CompilationUnit compUnit = Parser.parseString(sourceCode);

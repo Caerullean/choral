@@ -1,18 +1,18 @@
 package choral.compiler;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
+import java.util.HashSet;
 
 import choral.ast.CompilationUnit;
 import choral.ast.type.FormalWorldParameter;
+import choral.ast.type.WorldArgument;
 import choral.exceptions.AstPositionedException;
 import choral.exceptions.StaticVerificationException;
 
 public class NewTyper {
     // Does this hashmap need to be threadsafe?
-    private static final HashMap<String, List<String>> classToRolesMap = new HashMap<>();
+    private static final HashMap<String, HashSet<String>> classToRolesMap = new HashMap<>();
 
     public static Collection<CompilationUnit> annotate(Collection<CompilationUnit> sourceUnits){
         Visitor visitor = new Visitor();
@@ -29,17 +29,45 @@ public class NewTyper {
 
         private void visitClass(choral.ast.body.Class visitedClass){
             if (!classToRolesMap.containsKey(visitedClass.name().identifier())){
-                List<String> roles = new ArrayList<>();
+                HashSet<String> roles = new HashSet<>();
                 for (FormalWorldParameter param : visitedClass.worldParameters()){
                     roles.add(param.name().identifier());
                 }
                 classToRolesMap.put(visitedClass.name().identifier(), roles);
+
+                HashSet<String> fieldDeclarations = new HashSet<>();
+                for (choral.ast.body.Field field : visitedClass.fields()){
+                    visitField(field, visitedClass.name().identifier(), fieldDeclarations);
+                }
             } else {
                 throw new AstPositionedException(visitedClass.position(), 
                         new StaticVerificationException("Duplicate class definition: " + 
                             visitedClass.name().identifier()
                             + " already defined."));
-            }           
+            }  
+        }
+
+        private void visitField(choral.ast.body.Field visitedField, String classIdentifier, HashSet<String> fieldDeclarations){
+            if (visitedField.name().identifier().equals(classIdentifier)){
+                throw new AstPositionedException(visitedField.position(),
+                        new StaticVerificationException("Identifier already taken by class: " +
+                        visitedField.name().identifier()));
+            }
+            if (!fieldDeclarations.contains(visitedField.name().identifier())){
+                fieldDeclarations.add(visitedField.name().identifier());
+            } else {
+                throw new AstPositionedException(visitedField.position(), 
+                        new StaticVerificationException("Identifier already declared in scope: " + 
+                            visitedField.name().identifier()));
+            }
+            HashSet<String> roles = classToRolesMap.get(classIdentifier);
+            for (WorldArgument role : visitedField.typeExpression().worldArguments()){
+                if (!roles.contains(role.name().identifier())){
+                    throw new AstPositionedException(visitedField.position(),
+                            new StaticVerificationException("Role not present in class roles: " + 
+                                role.name().identifier()));
+                }
+            }
         }
     }
 }
