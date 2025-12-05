@@ -8,7 +8,7 @@ public class NewTyper {
     public static Collection<CompilationUnit> annotate(Collection<CompilationUnit> sourceUnits){
         Visitor visitor = new Visitor();
         sourceUnits.forEach( cu -> visitor.visit(cu));
-        return null;
+        return sourceUnits;
     }
 
     private static class Visitor{
@@ -19,7 +19,7 @@ public class NewTyper {
         }
 
         private void visitClass(choral.ast.body.Class visitedClass){
-            
+            System.out.println("Found class: " + visitedClass.name().identifier());
         }
     }
 }
