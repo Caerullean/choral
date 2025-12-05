@@ -47,6 +47,10 @@ public class Position {
 	}
 
 	public String formattedPosition() {
+		if (sourceFile == null){ 
+			return String.format( "line %d column %d", line, column );
+		}
+
 		String relativePath = Paths.get( "." ).toAbsolutePath().relativize(
 				Paths.get( sourceFile ).toAbsolutePath() ).toString();
 		return String.format( "file '%s' line %d column %d", relativePath, line, column );
