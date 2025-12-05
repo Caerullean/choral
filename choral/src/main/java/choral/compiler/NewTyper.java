@@ -48,17 +48,15 @@ public class NewTyper {
         }
 
         private void visitField(choral.ast.body.Field visitedField, String classIdentifier, HashSet<String> fieldDeclarations){
-            if (visitedField.name().identifier().equals(classIdentifier)){
+            if (classToRolesMap.containsKey(visitedField.name().identifier())){
                 throw new AstPositionedException(visitedField.position(),
-                        new StaticVerificationException("Identifier already taken by class: " +
-                        visitedField.name().identifier()));
+                        new StaticVerificationException("Identifier \"" + visitedField.name().identifier() + "\" already taken by class"));
             }
             if (!fieldDeclarations.contains(visitedField.name().identifier())){
                 fieldDeclarations.add(visitedField.name().identifier());
             } else {
                 throw new AstPositionedException(visitedField.position(), 
-                        new StaticVerificationException("Identifier already declared in scope: " + 
-                            visitedField.name().identifier()));
+                        new StaticVerificationException("Identifier \"" + visitedField.name().identifier() + "\" already declared in scope"));
             }
             HashSet<String> roles = classToRolesMap.get(classIdentifier);
             for (WorldArgument role : visitedField.typeExpression().worldArguments()){
