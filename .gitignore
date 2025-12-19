@@ -20,3 +20,4 @@ target/
 CLAUDE.md
 /tests/bin
 /tests/projectedOutput
+/choral/src/main/java/choral/NewTyperTester.java

@@ -140,6 +140,61 @@ public class Choral extends ChoralCommand implements Callable< Integer > {
 		}
 	}
 
+	@Command( name = "endpoint-projection-new-typer", aliases = { "nepp" }, 
+			description = "run the choral compiler using the new typer")
+	static class NewTyperProjector extends ChoralCommand implements Callable<Integer> {
+		
+		@Mixin
+		EmissionOptions emissionOptions;
+
+		@Mixin
+		PathOption.HeadersPathOption headersPathOption;
+
+		@Mixin
+		PathOption.SourcePathOption sourcesPathOption;
+		
+		@Parameters( index = "0", arity = "1" )
+		String symbol;
+
+		@Parameters( index = "1..*", arity = "0..*" )
+		List< String > worlds;
+
+		@Override
+		public Integer call(){
+			try {
+				Collection< File > sourceFiles = sourcesPathOption.getPaths( true ).stream()
+						.flatMap( wrapFunction( p -> Files.find( p, 999, ( q, a ) -> {
+							if( Files.isDirectory( q ) ) return false;
+							String x = q.toString();
+							x = x.substring(
+									x.length() - SourceObject.ChoralSourceObject.FILE_EXTENSION.length() ).toLowerCase();
+							return x.equals( SourceObject.ChoralSourceObject.FILE_EXTENSION );
+						}, FileVisitOption.FOLLOW_LINKS ) ) )
+						.map( Path::toFile )
+						.collect( Collectors.toList() );
+				Collection< CompilationUnit > sourceUnits = sourceFiles.stream().map(
+						wrapFunction( Parser::parseSourceFile ) ).collect( Collectors.toList() );
+				Collection< CompilationUnit > headerUnits = Stream.concat(
+								HeaderLoader.loadStandardProfile(),
+								HeaderLoader.loadFromPath(
+										headersPathOption.getPaths(),
+										sourceFiles,
+										true, true ) // TODO: keep this or introduce parameter also in EPP?
+						)
+						.collect( Collectors.toList() );
+				AtomicReference< Collection< CompilationUnit > > annotatedUnits = new AtomicReference<>();
+				profilerLog( "typechecking", () -> annotatedUnits.set( NewTyper.annotate( sourceUnits,
+						headerUnits ) ) );
+				System.out.println("It worked!");
+			} catch (Exception e) {
+				printNiceErrorMessage(e, verbosityOptions.verbosity());
+				System.err.println("new typer compilation failed");
+				return 1;
+			}
+			return 0;
+		}
+	}
+
 	@Command( name = "endpoint-projection", aliases = { "epp" },
 			description = "Generate local code by projecting a choreography at a set of roles."
 	)
