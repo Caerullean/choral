@@ -436,19 +436,7 @@ public abstract class HigherClassOrInterface extends HigherReferenceType
 					universe().topReferenceType( worldArguments() ) ) );
 		}
 
-		private boolean interfaceFinalised = false;
-
-		@Override
-		public final boolean isInterfaceFinalised() {
-			return interfaceFinalised;
-		}
-
-		public void finaliseInterface() {
-			assert ( isInheritanceFinalised() && extendedClassesOrInterfaces()
-					.allMatch( GroundReferenceType::isInterfaceFinalised ) );
-			if( interfaceFinalised ) {
-				return;
-			}
+		public abstract void finaliseInterface() {
 			// (JSL 8.3) Inherit fields from direct superclasses and superinterfaces
 			extendedClassesOrInterfaces().flatMap( GroundReferenceType::fields )
 					.filter( x -> x.isAccessibleFrom( this )

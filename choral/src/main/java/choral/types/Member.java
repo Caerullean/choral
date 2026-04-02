@@ -104,6 +104,10 @@ public abstract class Member implements HasSource {
 		return modifiers.contains( ABSTRACT );
 	}
 
+	public final boolean isConcrete() {
+		return !isAbstract() && !isDefault();
+	}
+
 	public final boolean isPublic() {
 		return modifiers.contains( PUBLIC );
 	}
