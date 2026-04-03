@@ -223,19 +223,19 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 							&& declaredFields().noneMatch( y -> x.identifier().equals( y.identifier() ) ) )
 					.forEach( inheritedFields::add );
 
-			// Next, we inherit methods from direct superclasses and superinterfaces
+			//////// COMPUTE INHERITED METHODS
 
 			// (JLS 8.4.8) A class C inherits from its direct superclass all concrete methods m (both static and
 			// instance) of the superclass for which all of the following are true:
 			// • m is a member of the direct superclass of C.
 			// • m is public, protected, or declared with package access in the same package as C.
 			// • No method declared in C has a signature that is a subsignature (§8.4.2) of the signature of m.
-			var inheritedConcreteMethods =
+			var concreteMethodsInheritedFromSuperclass =
 					extendedClass().map( GroundClass::methods ).orElseGet( Stream::empty )
 						.filter( m -> m.isConcrete() && m.isAccessibleFrom( this ) )
 						.filter( m -> declaredMethods().noneMatch( x -> x.isSubSignatureOf( m ) ) )
 						.toList();
-            inheritedMethods.addAll( inheritedConcreteMethods );
+            inheritedMethods.addAll( concreteMethodsInheritedFromSuperclass );
 
 			// (JLS 8.4.8) A class C inherits from its direct superclass and direct superinterfaces all abstract and
 			// default (§9.4) methods m for which all of the following are true:
@@ -251,11 +251,13 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 					.filter( m -> m.isAbstract() || m.isDefault() )
 					.filter( m -> m.isAccessibleFrom( this ) )
 					.filter( m -> declaredMethods().noneMatch( x -> x.isSubSignatureOf( m ) ) )
-					.filter( m -> inheritedConcreteMethods.stream().noneMatch( x -> x.isSubSignatureOf( m ) ) )
 					.filter( m ->
-							// m is an abstract or default method in superclass or superinterface D.
-							// For every class or interface D' in extendedClassesOrInterfaces(), check every method m'
-							// in D' where m != m and D != D'. If m' overrides m from D', don't inherit m.
+							concreteMethodsInheritedFromSuperclass.stream().noneMatch( x -> x.isSubSignatureOf( m ) )
+					)
+					.filter( m ->
+							// Don't inherit a method if another parent overrides it.
+							// For every class or interface D2 in extendedClassesOrInterfaces(), check every method m2
+							// in D2 where m != m2 and D != D2. If m2 overrides m from D2, don't inherit m.
 							extendedClassesOrInterfaces()
 									.filter( D2 -> !D2.isEquivalentTo( m.declarationContext() ) )
 									.flatMap( GroundReferenceType::methods )
@@ -278,31 +280,52 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 		}
 
 		/**
+		 * Returns the strict superclasses of this class in ascending order (starting from the direct superclass).
+		 */
+		private Stream< GroundClass > strictSuperclasses() {
+			var result = new ArrayList< GroundClass >();
+			for ( var D = extendedClass; D != null; D = D.extendedClass().orElse( null ) ) {
+				result.add( D );
+			}
+			return result.stream();
+		}
+
+		/**
 		 * Returns true iff mC overrides mA from this class. See JLS 8.4.8.1 for details.
 		 */
 		@Override
 		public boolean overrides( Member.HigherMethod mC, Member.HigherMethod mA ) {
+
+			// (JLS 8.4.8.1) An instance method mC declared in or inherited by class C, overrides from C another method
+			// mA declared in an *interface* A, iff all of the following are true:
+			// 1. A is a superinterface of C.
+			// 2. mA is an abstract or default method.
+			// 3. The signature of mC is a subsignature (§8.4.2) of the signature of mA.
+			//
+			// (JLS 8.4.8.1) An instance method mC declared in or inherited by class C, overrides from C another method
+			// mA declared in *class* A, iff all of the following are true:
+			// 4. A is a superclass of C.
+			// 5. C does not inherit mA.
+			// 6. The signature of mC is a subsignature (§8.4.2) of the signature of mA.
+			// 7. One of the following is true:
+			// 	(a) mA is public.
+			// 	(b) mA is protected.
+			// 	(c) mA is declared with package access in the same package as C, and either C declares mC or mA is a
+			//      member of the direct superclass of C.
+			//  (d) mA is declared with package access and mC overrides mA from some superclass of C.
+			//  (e) mA is declared with package access and mC overrides a method m' from C (m' distinct from mC and mA)
+			//      such that m' overrides mA from some superclass of C.
+
 			GroundClassOrInterface C = this;
 			GroundClassOrInterface A = mA.declarationContext();
 
 			// The interface must be finalized because we check if mA is inherited by C.
-			assert isInterfaceFinalised();
-			// The JLS only tells us what to do if mC is "declared in or inherited by C" and "mA is declared in A".
-			assert C.methods().anyMatch( m -> m == mC ) && A.methods().anyMatch( m -> m == mA );
+			assert C.isInterfaceFinalised();
+			// The JLS presupposes mC is "declared in or inherited by C" and "mA is declared in A".
+			if ( C.methods().noneMatch( m -> m == mC ) || A.declaredMethods().noneMatch( m -> m == mA ) ) {
+				return false;
+			}
 
-			// (JLS 8.4.8.1) An instance method mC declared in or inherited by class C, overrides from C another method
-			// mA declared in class A, iff all of the following are true:
-			// • A is a superclass of C.
-			// • C does not inherit mA.
-			// • The signature of mC is a subsignature (§8.4.2) of the signature of mA.
-			// • One of the following is true:
-			// 		– mA is public.
-			// 		– mA is protected.
-			// 		– mA is declared with package access in the same package as C, and either C declares mC or mA is a
-			//  	member of the direct superclass of C.
-			//  	– mA is declared with package access and mC overrides mA from some superclass of C.
-			//  	– mA is declared with package access and mC overrides a method m' from C (m' distinct from mC and
-			//  	mA) such that m' overrides mA from some superclass of C.
 			if ( A.isClass() ) {
 				if ( !A.isSubtypeOf( C, false ) ) {
 					return false;
@@ -321,21 +344,24 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 								extendedClass != null && extendedClass.methods().anyMatch( m -> m == mA ) ) ) {
 					return true;
 				}
-				if ( mA.isPackagePrivate() && C.overridesFromSuperclass( mC, mA ) ) {
-					return true;
-				}
-				if ( mA.isPackagePrivate() && C.overridesFromSuperclass( mC, mA, true ) ) {
-					return true;
+				if ( mA.isPackagePrivate() ) {
+					// (7.d) Check if mC overrides mA from some strict superclass D of C.
+					// Walk the chain; for each D, mC must also be a member of D.
+					if ( strictSuperclasses().anyMatch( D -> D.overrides( mC, mA ) ) ) {
+						return true;
+					}
+					// (7.e) Check if there exists m2 in C.methods() \ {mC, mA} such that:
+					//  i.  m2 overrides mA from some strict superclass D of C, and
+					//  ii. mC overrides m2 from C.
+					return C.methods()
+							.filter( m2 -> m2 != mC && m2 != mA )
+							.filter( m2 -> strictSuperclasses().anyMatch( D -> D.overrides( m2, mA ) ) )
+							.anyMatch( m2 -> C.overrides( mC, m2 ) );
 				}
 				return false;
 			}
-
-			// (JLS 8.4.8.1) An instance method mC declared in or inherited by class C, overrides from C another method
-			// mA declared in an interface A, iff all of the following are true:
-			// • A is a superinterface of C.
-			// • mA is an abstract or default method.
-			// • The signature of mC is a subsignature (§8.4.2) of the signature of mA.
 			else {
+				assert A.isInterface();
 				return A.isSubtypeOf( C, false ) &&
 						( mA.isAbstract() || mA.isDefault() ) &&
 						mC.isSubSignatureOf( mA );
