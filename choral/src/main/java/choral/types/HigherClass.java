@@ -283,11 +283,8 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 		 * Returns the strict superclasses of this class in ascending order (starting from the direct superclass).
 		 */
 		private Stream< GroundClass > strictSuperclasses() {
-			var result = new ArrayList< GroundClass >();
-			for ( var D = extendedClass; D != null; D = D.extendedClass().orElse( null ) ) {
-				result.add( D );
-			}
-			return result.stream();
+			if ( extendedClass == null ) return Stream.empty();
+			return Stream.iterate( extendedClass, Objects::nonNull, d -> d.extendedClass().orElse( null ) );
 		}
 
 		/**
