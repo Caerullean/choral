@@ -268,18 +268,8 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 										//  overriders
 					)
 					.forEach( inheritedMethods::add );
-					// TODO Does this logic allow some methods to be inherited multiple times from different
-					//  place?
 
-			// TODO We still need to check the requirements on overriding.
-			// TODO If the parent method is a selection method, mark the child as a selection method too
-			// if( methodToInherit.isSelectionMethod() ) {
-			// 		declaredMethod.setSelectionMethod();
-			// 	}
-			// 	if (methodToInherit.isTypeSelectionMethod()) {
-			// 		declaredMethod.setTypeSelectionMethod();
-			// 	}
-
+			computeOverrides();
 
 			interfaceFinalised = true;
 		}
@@ -326,13 +316,13 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 			GroundClassOrInterface A = mA.declarationContext();
 
 			if( A.isInterface() ) {
-				return A.isSubtypeOf( C, false ) &&
+				return C.isSubtypeOf( A, false ) &&
 						( mA.isAbstract() || mA.isDefault() ) &&
 						mC.isSubSignatureOf( mA );
 			}
 			else {
 				assert A.isClass();
-				if ( !A.isSubtypeOf( C, false ) ) {
+				if ( !C.isSubtypeOf( A, false ) ) {
 					return false;
 				}
 				if ( inheritedMethods.stream().anyMatch( m -> m.equals( mA ) ) ) {
@@ -367,6 +357,24 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 				return false;
 			}
 
+		}
+
+		private void computeOverrides() {
+
+			// TODO search all ancestors, not just direct ancestors
+			// Collect all methods visible in ancestor types, deduplicated by identity.
+			// Use distinct() here because the same HigherMethod instance can be reachable
+			// via multiple inheritance paths; we only want to check each pair once.
+			List< Member.HigherMethod > ancestorMethods = extendedClassesOrInterfaces()
+					.flatMap( GroundReferenceType::methods )
+					.distinct()
+					.collect( Collectors.toList() );
+
+			methods().forEach( mC ->
+					ancestorMethods.stream()
+							.filter( mA -> this.overrides( mC, mA ) )
+							.forEach( mA -> checkOverrideRequirementsOrThrow( mC, mA ) )
+			);
 		}
 
 		private void checkOverrideRequirementsOrThrow(Member.HigherMethod child, Member.HigherMethod parent) {
@@ -408,6 +416,14 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 						+ "', attempting to assign weaker access privileges '"
 						+ ModifierUtils.prettyAccess( child.modifiers() ) + "' to '"
 						+ ModifierUtils.prettyAccess( parent.modifiers() ) + "'" );
+			}
+
+			// If the parent method is a selection method, mark the child as a selection method too
+			if( parent.isSelectionMethod() ) {
+				child.setSelectionMethod();
+			}
+			if( parent.isTypeSelectionMethod() ) {
+				child.setTypeSelectionMethod();
 			}
 		}
 
