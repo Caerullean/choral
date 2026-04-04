@@ -255,16 +255,21 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 							concreteMethodsInheritedFromSuperclass.stream().noneMatch( x -> x.isSubSignatureOf( m ) )
 					)
 					.filter( m ->
-							// Don't inherit a method if another parent overrides it.
+							// Simply put: Don't inherit a method from D if another parent D2 overrides it.
 							// For every class or interface D2 in extendedClassesOrInterfaces(), check every method m2
 							// in D2 where m != m2 and D != D2. If m2 overrides m from D2, don't inherit m.
 							extendedClassesOrInterfaces()
 									.filter( D2 -> !D2.isEquivalentTo( m.declarationContext() ) )
 									.flatMap( GroundReferenceType::methods )
-									.filter( m2 -> m2 != m )
+									.filter( m2 -> !m2.equals( m ) )
+										// TODO Override the equals method for HigherCallable.Proxy
 									.noneMatch( m2 -> m2.declarationContext().overrides( m2, m ) )
+										// TODO Might want to profile this and create a mapping from m to its
+										//  overriders
 					)
 					.forEach( inheritedMethods::add );
+					// TODO Does this logic allow some methods to be inherited multiple times from different
+					//  place?
 
 			// TODO We still need to check the requirements on overriding.
 			// TODO If the parent method is a selection method, mark the child as a selection method too
@@ -293,6 +298,10 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 		@Override
 		public boolean overrides( Member.HigherMethod mC, Member.HigherMethod mA ) {
 
+			// TODO We'll need to compute the overrides relation anyway (e.g. when computing inherited methods for this
+			//  type's descendants) So let's eagerly search all the methods in mC to compute this.
+			//  For each method in mC and for each method declared in a parent class or interface, compute:
+
 			// (JLS 8.4.8.1) An instance method mC declared in or inherited by class C, overrides from C another method
 			// mA declared in an *interface* A, iff all of the following are true:
 			// 1. A is a superinterface of C.
@@ -316,18 +325,18 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 			GroundClassOrInterface C = this;
 			GroundClassOrInterface A = mA.declarationContext();
 
-			// The interface must be finalized because we check if mA is inherited by C.
-			assert C.isInterfaceFinalised();
-			// The JLS presupposes mC is "declared in or inherited by C" and "mA is declared in A".
-			if ( C.methods().noneMatch( m -> m == mC ) || A.declaredMethods().noneMatch( m -> m == mA ) ) {
-				return false;
+			if( A.isInterface() ) {
+				return A.isSubtypeOf( C, false ) &&
+						( mA.isAbstract() || mA.isDefault() ) &&
+						mC.isSubSignatureOf( mA );
 			}
-
-			if ( A.isClass() ) {
+			else {
+				assert A.isClass();
 				if ( !A.isSubtypeOf( C, false ) ) {
 					return false;
 				}
-				if ( C.methods().anyMatch( m -> m == mA ) ) {
+				if ( inheritedMethods.stream().anyMatch( m -> m.equals( mA ) ) ) {
+					// TODO Implement equality for proxy callables
 					return false;
 				}
 				if ( !mC.isSubSignatureOf( mA ) ) {
@@ -357,14 +366,51 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 				}
 				return false;
 			}
-			else {
-				assert A.isInterface();
-				return A.isSubtypeOf( C, false ) &&
-						( mA.isAbstract() || mA.isDefault() ) &&
-						mC.isSubSignatureOf( mA );
-			}
 
 		}
+
+		private void checkOverrideRequirementsOrThrow(Member.HigherMethod child, Member.HigherMethod parent) {
+			// (8.4.3.3) Ensure we're not overriding a final method
+			if( parent.isFinal() ) {
+				throw new StaticVerificationException( "method '" + child
+						+ "' in '" + this + "' cannot override final method '"
+						+ parent + "' in '" + parent.declarationContext() + "'" );
+			}
+			// (8.4.8.1) Ensure instance methods don't override static methods
+			if( !child.isStatic() && parent.isStatic() ) {
+				throw new StaticVerificationException( "instance method '" + child
+						+ "' in '" + this + "' cannot override static method '"
+						+ parent + "' in '" + parent.declarationContext() + "'" );
+			}
+			// (8.4.8.2) Ensure static methods don't hide instance methods
+			if( child.isStatic() && !parent.isStatic() ) {
+				throw new StaticVerificationException( "static method '" + child
+						+ "' in '" + this + "' cannot override instance method '"
+						+ parent + "' in '" + parent.declarationContext() + "'" );
+			}
+			// (8.4.8.3) Ensure method return types are covariant
+			if( !child.isReturnTypeSubstitutableFor(parent) ) {
+				throw new StaticVerificationException( "method '" + child
+						+ "' in '" + this + "' clashes with method '"
+						+ parent + "' in '" + parent.declarationContext()
+						+ "', attempting to use incompatible return type" );
+			}
+
+			// (8.4.8.3) JLS says we should issue a warning if child is not a subtype of parent; we skip that check.
+			// (8.4.8.3) Choral doesn't have checked exceptions yet, so we skip those checks.
+
+			// (8.4.8.3) Ensure the access modifiers are compatible
+			if( child.isPrivate() || ( parent.isPublic() && !child.isPublic() )
+					|| ( parent.isProtected() && child.isPackagePrivate() ) ) {
+				throw new StaticVerificationException( "method '" + child
+						+ "' in '" + this + "' clashes with method '"
+						+ parent + "' in '" + parent.declarationContext()
+						+ "', attempting to assign weaker access privileges '"
+						+ ModifierUtils.prettyAccess( child.modifiers() ) + "' to '"
+						+ ModifierUtils.prettyAccess( parent.modifiers() ) + "'" );
+			}
+		}
+
 
 		private final List< Member.HigherConstructor > constructors = new LinkedList<>();
 
@@ -455,6 +501,15 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 		@Override
 		public final Stream< ? extends Member.HigherConstructor > constructors() {
 			return definition().constructors().map( x -> x.applySubstitution( substitution() ) );
+		}
+
+		@Override
+		public boolean overrides( Member.HigherMethod m1, Member.HigherMethod m2 ) {
+			return definition().overrides(
+					m1,
+					m2
+					// TODO Apply the reverse substitution to the methods
+			);
 		}
 
 	}

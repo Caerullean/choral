@@ -436,174 +436,7 @@ public abstract class HigherClassOrInterface extends HigherReferenceType
 					universe().topReferenceType( worldArguments() ) ) );
 		}
 
-		public abstract void finaliseInterface() {
-			// (JSL 8.3) Inherit fields from direct superclasses and superinterfaces
-			extendedClassesOrInterfaces().flatMap( GroundReferenceType::fields )
-					.filter( x -> x.isAccessibleFrom( this )
-							&& declaredFields().noneMatch(
-							y -> x.identifier().equals( y.identifier() ) ) )
-					.forEach( inheritedFields::add );
-			// (JSL 8.4.8) Inherit methods from direct superclasses and superinterfaces
-			extendedClassesOrInterfaces().flatMap( GroundReferenceType::methods )
-					.filter( x -> x.isAccessibleFrom( this ) )
-					.forEach( methodToInherit -> {
-						boolean inherited = true;     // true iff methodToInherit should be inherited
-						boolean implemented = false;  // true iff a method in this class that implements methodToInherit
-						for( Member.HigherMethod declaredMethod : declaredMethods ) {
-							if( declaredMethod.isSubSignatureOf( methodToInherit ) ) {
-								// If the parent method is a selection method, mark the child as a selection method too
-								if( methodToInherit.isSelectionMethod() ) {
-									declaredMethod.setSelectionMethod();
-								}
-								if (methodToInherit.isTypeSelectionMethod()) {
-									declaredMethod.setTypeSelectionMethod();
-								}
-
-								// Now check that 'declaredMethod' satisfies all the requirements in JLS 8.4.8
-								checkOverrideRequirementsOrThrow(declaredMethod, methodToInherit);
-
-								implemented = !declaredMethod.isAbstract();
-								if( declaredMethod.sameSignatureAsErasureOf( methodToInherit ) && !declaredMethod.sameSignatureAs( methodToInherit ) ) {
-									inherited = true;
-									for( Member.HigherMethod z : inheritedMethods ) {
-										if( z.isSubSignatureOf( methodToInherit ) ) {
-											// // TODO When does this happen?
-											if( !z.isReturnTypeSubstitutableFor( methodToInherit ) ) {
-												throw new StaticVerificationException(
-														"method '" + z
-																+ "' in '" + z.declarationContext()
-																+ "' clashes with method '" + methodToInherit
-																+ "' in '" + methodToInherit.declarationContext()
-																+ "', attempting to use incompatible return type" );
-											}
-											inherited = false;
-											break;
-										}
-									}
-								}
-								else {
-									inherited = false;
-								}
-								break;
-							}
-							// TODO When does this happen?
-							else if( methodToInherit.sameErasureAs( declaredMethod ) ) {
-								// (JLS 8.4.8.3) If the class declares a method m1 that matches the erasure of a parent
-								// method m2, then m1 must be a subsignature of m2.
-								throw new StaticVerificationException( "method '" + declaredMethod
-										+ "' in '" + this + "' clashes with method '"
-										+ methodToInherit + "' in '" + methodToInherit.declarationContext()
-										+ "', both methods have the same erasure" );
-							}
-						}
-						if( inherited ) {
-							// TODO check implementation
-							// bad variable name??
-							boolean implementationRequirementSatisfied = false;
-							if( !implemented && !isAbstract() && methodToInherit.isAbstract() ) {
-								for(Member.HigherMethod inheritedMethod : inheritedMethods){
-									if(!inheritedMethod.isAbstract() && inheritedMethod.isSubSignatureOf(methodToInherit)
-										&& inheritedMethod.isReturnTypeSubstitutableFor(methodToInherit)){
-										implementationRequirementSatisfied = true;
-										break;
-									}
-								}
-								if(!implementationRequirementSatisfied) {
-									throw new StaticVerificationException( "'" + this + "' must either "
-										+ "be declared as abstract or implement abstract method '"
-										+ methodToInherit + "' in '" + methodToInherit.declarationContext() + "'" );
-								}
-							}
-							boolean isDiamondDuplicate = false;
-							// handle default methods with identical signature to existing inherited default method
-							if(methodToInherit.isDefault()){
-								for(Member.HigherMethod inheritedMethod : inheritedMethods){
-									// sameSignatureOf method is bi-directional
-									// methodToInherit.SameSignatureOf(inheritedMethod) == inheritedMethod.sameSignatureOf(methodToInherit)
-									boolean sameSignature = methodToInherit.sameSignatureAs(inheritedMethod);
-									
-									// only throw exception if both is default. 
-									if(inheritedMethod.isDefault() && sameSignature){
-										GroundReferenceType xContext = methodToInherit.declarationContext();
-										GroundReferenceType inheritedContext = inheritedMethod.declarationContext();
-										
-										// diamond path duplicate -> method is already present
-										if(xContext.isEquivalentTo_relaxed(inheritedContext)){
-											isDiamondDuplicate = true;
-											break;
-										}
-
-										// Check if one methods defining interface is more specific than the others'
-										boolean xPriority = xContext.isSubtypeOf_relaxed(inheritedContext);
-										boolean inheritedPriotiy = inheritedContext.isSubtypeOf_relaxed(xContext);
-
-										// If neither interface has priority, it means two completely separate interfaces 
-										// defined identical default methods -> illegal. 
-										if(!xPriority && !inheritedPriotiy){
-											throw new StaticVerificationException("Duplicate default methods inherited. " +
-											"'" + this + "' must override '" + methodToInherit + "'' from '" + methodToInherit.declarationContext() +
-											"' which is identical to '" + inheritedMethod + "' from '" + 
-											inheritedMethod.declarationContext() + "'");
-										}
-
-										// Defensive check, in case interface finalisation order ever changes. 
-										assert (xPriority ? methodToInherit.isReturnTypeSubstitutableFor(inheritedMethod)
-														: inheritedMethod.isReturnTypeSubstitutableFor(methodToInherit))
-											: "Return type incompatibility was not caught. Error in finaliseInterface. " 
-											+ " Return type compatibility assumption was made based on interface finalization order.";
-									}
-								}
-							}
-							if (!implementationRequirementSatisfied && !implemented && !isDiamondDuplicate){
-								inheritedMethods.add( methodToInherit.copyFor( this ) );
-							}
-						}
-					} );
-			interfaceFinalised = true;
-		}
-
-		private void checkOverrideRequirementsOrThrow(Member.HigherMethod child, Member.HigherMethod parent) {
-			// (8.4.3.3) Ensure we're not overriding a final method
-			if( parent.isFinal() ) {
-				throw new StaticVerificationException( "method '" + child
-						+ "' in '" + this + "' cannot override final method '"
-						+ parent + "' in '" + parent.declarationContext() + "'" );
-			}
-			// (8.4.8.1) Ensure instance methods don't override static methods
-			if( !child.isStatic() && parent.isStatic() ) {
-				throw new StaticVerificationException( "instance method '" + child
-						+ "' in '" + this + "' cannot override static method '"
-						+ parent + "' in '" + parent.declarationContext() + "'" );
-			}
-			// (8.4.8.2) Ensure static methods don't hide instance methods
-			if( child.isStatic() && !parent.isStatic() ) {
-				throw new StaticVerificationException( "static method '" + child
-						+ "' in '" + this + "' cannot override instance method '"
-						+ parent + "' in '" + parent.declarationContext() + "'" );
-			}
-			// (8.4.8.3) Ensure method return types are covariant
-			if( !child.isReturnTypeSubstitutableFor(parent) ) {
-				throw new StaticVerificationException( "method '" + child
-						+ "' in '" + this + "' clashes with method '"
-						+ parent + "' in '" + parent.declarationContext()
-						+ "', attempting to use incompatible return type" );
-			}
-
-			// (8.4.8.3) JLS says we should issue a warning if child is not a subtype of parent; we skip that check.
-			// (8.4.8.3) Choral doesn't have checked exceptions yet, so we skip those checks.
-
-			// (8.4.8.3) Ensure the access modifiers are compatible
-			if( child.isPrivate() || ( parent.isPublic() && !child.isPublic() )
-					|| ( parent.isProtected() && child.isPackagePrivate() ) ) {
-				throw new StaticVerificationException( "method '" + child
-						+ "' in '" + this + "' clashes with method '"
-						+ parent + "' in '" + parent.declarationContext()
-						+ "', attempting to assign weaker access privileges '"
-						+ ModifierUtils.prettyAccess( child.modifiers() ) + "' to '"
-						+ ModifierUtils.prettyAccess( parent.modifiers() ) + "'" );
-			}
-		}
-
+		public abstract void finaliseInterface();
 
 		protected final List< Member.Field > inheritedFields = new LinkedList<>();
 
@@ -619,7 +452,7 @@ public abstract class HigherClassOrInterface extends HigherReferenceType
 		}
 
 		public void addField( Member.Field field ) {
-			assert ( !interfaceFinalised );
+			assert ( !isInterfaceFinalised() );
 			assert ( field.declarationContext() == this );
 			if( declaredFields().anyMatch( x -> x.identifier().equals( field.identifier() ) ) ) {
 				throw new StaticVerificationException(
@@ -630,7 +463,7 @@ public abstract class HigherClassOrInterface extends HigherReferenceType
 		}
 
 		public void addMethod( Member.HigherMethod method ) {
-			assert ( !interfaceFinalised );
+			assert ( !isInterfaceFinalised() );
 			assert ( method.declarationContext() == this );
 			for( Member.HigherMethod x : declaredMethods ) {
 				if( x.sameErasureAs( method ) ) {
@@ -734,14 +567,14 @@ public abstract class HigherClassOrInterface extends HigherReferenceType
 				Proxy other = (Proxy) type;
 				if (this.definition() != other.definition())
 					return false;
-				if (typeArguments().size() != other.typeArguments().size()) 
+				if (typeArguments().size() != other.typeArguments().size())
 					return false;
 				for( int i = 0; i < typeArguments().size(); i++ ){
 					if ( !typeArguments().get(i).isEquivalentTo_relaxed( other.typeArguments().get(i) ) )
 						return false;
 				}
 				return true;
-						
+
 			} else {
 				return false;
 			}

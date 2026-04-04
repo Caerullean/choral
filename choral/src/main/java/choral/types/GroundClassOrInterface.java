@@ -61,6 +61,11 @@ public interface GroundClassOrInterface extends ClassOrInterface, GroundReferenc
 
 	Stream< Member.HigherMethod > declaredMethods();
 
+	/**
+	 * Returns true iff m1 overrides m2 from this class or interface.
+	 */
+	boolean overrides( Member.HigherMethod m1, Member.HigherMethod m2 );
+
 	@Override
 	default boolean isEquivalentToErasureOf( GroundDataType type ) {
 		// revise when adding RAW types

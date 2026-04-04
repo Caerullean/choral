@@ -155,6 +155,31 @@ public final class HigherInterface extends HigherClassOrInterface implements Int
 			super.addMethod( method );
 		}
 
+		private boolean interfaceFinalised = false;
+
+		@Override
+		public final boolean isInterfaceFinalised() {
+			return interfaceFinalised;
+		}
+
+		@Override
+		public void finaliseInterface() {
+			assert (isInheritanceFinalised() && extendedClassesOrInterfaces()
+					.allMatch(GroundReferenceType::isInterfaceFinalised));
+			if (isInterfaceFinalised()) {
+				return;
+			}
+
+			// TODO
+
+			interfaceFinalised = true;
+		}
+
+		@Override
+		public boolean overrides(Member.HigherMethod m1, Member.HigherMethod m2) {
+			return false; // TODO
+		}
+
 	}
 
 	/** @see HigherDataType.Proxy */
@@ -177,6 +202,11 @@ public final class HigherInterface extends HigherClassOrInterface implements Int
 		@Override
 		public GroundInterface applySubstitution( Substitution substitution ) {
 			return definition().applySubstitution( substitution().andThen( substitution ) );
+		}
+
+		@Override
+		public boolean overrides(Member.HigherMethod m1, Member.HigherMethod m2) {
+			return definition().overrides( m1, m2 ); // TODO Apply substitution in reverse
 		}
 
 	}
