@@ -80,7 +80,6 @@
                 <version>3.2.5</version>
                 <configuration>
                     <printSummary>false</printSummary>
-                    <testFailureIgnore>true</testFailureIgnore>
                 </configuration>
             </plugin>
         </plugins>
