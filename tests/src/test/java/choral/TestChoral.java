@@ -140,6 +140,9 @@ public class TestChoral {
 		mustPass.addSources("ClassLifterIntegration", subFolder(TYPER_PASS,"ClassLifterIntegration"));
 		mustPass.addSources("DualJavaImport", subFolder(TYPER_PASS, "DualJavaImport"));
 		mustPass.addSources("StandardLibraryReduction", subFolder(TYPER_PASS, "StandardLibraryReduction"));
+		mustPass.addSources("ProtectedMethodInherited", subFolder(TYPER_PASS, "ProtectedMethodInherited"));
+		mustPass.addSources("PublicMethodAccessibleFromOutside", subFolder(TYPER_PASS, "PublicMethodAccessibleFromOutside"));
+		mustPass.addSources("PrivateDeclaredPublic", subFolder(TYPER_PASS, "PrivateDeclaredPublic"));
 
 		CompilationRequestBuilder mustFail = new CompilationRequestBuilder();
 		mustFail.addSources("InstanceOverridesStatic", subFolder(TYPER_FAIL, "InstanceOverridesStatic"));
@@ -149,6 +152,7 @@ public class TestChoral {
 		mustFail.addSources("WeakerAccess3", subFolder(TYPER_FAIL, "WeakerAccess3"));
 		mustFail.addSources("OverrideFinal", subFolder(TYPER_FAIL, "OverrideFinal"));
 		mustFail.addSources("IncompatibleReturnType", subFolder(TYPER_FAIL, "IncompatibleReturnType"));
+		mustFail.addSources("PrivateMethodNotInherited", subFolder(TYPER_FAIL, "PrivateMethodNotInherited"));
 
 		return Stream.concat(
 				mustPass.build().map(request ->
