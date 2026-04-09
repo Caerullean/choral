@@ -157,6 +157,8 @@ public class TestChoral {
 		mustFail.addSources("PrivateMethodNotInherited", subFolder(TYPER_FAIL, "PrivateMethodNotInherited"));
 		mustFail.addSources("PeerOverridePackagePrivate", subFolder(TYPER_FAIL, "PeerOverridePackagePrivate"));
 		mustFail.addSources("OverrideEquivalentDeclarations", subFolder(TYPER_FAIL, "OverrideEquivalentDeclarations"));
+		mustFail.addSources("ErasureClashSameClass", subFolder(TYPER_FAIL, "ErasureClashSameClass"));
+		mustFail.addSources("ErasureClashInherited", subFolder(TYPER_FAIL, "ErasureClashInherited"));
 		mustFail.addSources("AbstractMethodInNonAbstractClass", subFolder(TYPER_FAIL, "AbstractMethodInNonAbstractClass"));
 
 		return Stream.concat(

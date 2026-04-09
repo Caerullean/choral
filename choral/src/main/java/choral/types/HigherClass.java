@@ -288,6 +288,18 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 							.forEach( mA -> checkOverrideRequirementsOrThrow( mC, mA ) )
 			);
 
+			// (JLS 8.4.8.3) It is a compile-time error if T has a member method m1 and there exists
+			// a method m2 declared in T or a supertype of T such that all of the following are true:
+			// - m1 and m2 have the same name
+			// - m2 is accessible from T
+			// - The signature of m1 is NOT a subsignature of m2
+			// - The signature of m1 (or some method m1 overrides) has the same erasure as the
+			//   signature of m2 (or some method m2 overrides).
+			// The within-class case (two declared methods with same erasure) is already caught by
+			// addMethod. Here we catch the cross-class case: a declared method clashes with an
+			// accessible inherited method that has the same erasure.
+			checkErasureClashesOrThrow( ancestorMethods );
+
 			interfaceFinalised = true;
 		}
 
@@ -369,6 +381,24 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 				return false;
 			}
 
+		}
+
+		private void checkErasureClashesOrThrow( List< Member.HigherMethod > ancestorMethods ) {
+			declaredMethods().forEach( m1 ->
+					ancestorMethods.stream()
+							.filter( m2 -> m2 != m1 )
+							.filter( m2 -> m1.identifier().equals( m2.identifier() ) )
+							.filter( m2 -> m2.isAccessibleFrom( this ) )
+							.filter( m2 -> !m1.isSubSignatureOf( m2 ) )
+							.filter( m2 -> m1.sameErasureAs( m2 ) )
+							.findFirst()
+							.ifPresent( m2 -> {
+								throw new StaticVerificationException(
+										"method '" + m1 + "' in '" + this + "' clashes with method '"
+												+ m2 + "' in '" + m2.declarationContext()
+												+ "', both methods have the same erasure" );
+							} )
+			);
 		}
 
 		private void checkOverrideRequirementsOrThrow(Member.HigherMethod child, Member.HigherMethod parent) {
