@@ -236,6 +236,32 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 
 			//////// COMPUTE INHERITED METHODS
 
+			// Precompute the set of methods defined in direct superclasses and interfaces.
+			var allAncestorMethods = extendedClassesOrInterfaces()
+					.flatMap( GroundReferenceType::methods )
+					.distinct()
+					.toList();
+
+			// Precompute the set of ancestor methods that are overridden by some other ancestor.
+			Set< Member.HigherMethod > overriddenByAnother =
+					Collections.newSetFromMap( new IdentityHashMap<>() );
+			for ( Member.HigherMethod m : allAncestorMethods ) {
+				for ( Member.HigherMethod m2 : allAncestorMethods ) {
+					if ( m2.equals( m ) ) continue;  // TODO: Implement equality for proxy callables
+					if ( m2.declarationContext().isEquivalentTo( m.declarationContext() ) ) continue;
+					if ( m2.declarationContext().overrides( m2, m ) ) {
+						overriddenByAnother.add( m );
+						break; // m is already marked; no further m2 needed
+					}
+				}
+			}
+
+			// Precompute a grouping of ancestor methods by name for efficient lookup.
+			Map< String, List< Member.HigherMethod > > ancestorsByName =
+					allAncestorMethods.stream()
+							.collect( Collectors.groupingBy( Member.HigherMethod::identifier ) );
+
+
 			// (JLS 8.4.8) A class C inherits from its direct superclass all concrete methods m (both static and
 			// instance) of the superclass for which all of the following are true:
 			// • m is a member of the direct superclass of C.
@@ -246,7 +272,7 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 						.filter( m -> m.isConcrete() && m.isAccessibleFrom( this ) )
 						.filter( m -> declaredMethods().noneMatch( x -> x.isSubSignatureOf( m ) ) )
 						.toList();
-            inheritedMethods.addAll( concreteMethodsInheritedFromSuperclass );
+			inheritedMethods.addAll( concreteMethodsInheritedFromSuperclass );
 
 			// (JLS 8.4.8) A class C inherits from its direct superclass and direct superinterfaces all abstract and
 			// default (§9.4) methods m for which all of the following are true:
@@ -258,48 +284,92 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 			// • There exists no method m' that is a member of the direct superclass or a direct superinterface, D',
 			//   of C (m distinct from m', D distinct from D'), such that m' from D' overrides the declaration of
 			//   the method m.
-			extendedClassesOrInterfaces().flatMap( GroundReferenceType::methods )
+			allAncestorMethods.stream()
 					.filter( m -> m.isAbstract() || m.isDefault() )
 					.filter( m -> m.isAccessibleFrom( this ) )
 					.filter( m -> declaredMethods().noneMatch( x -> x.isSubSignatureOf( m ) ) )
 					.filter( m ->
 							concreteMethodsInheritedFromSuperclass.stream().noneMatch( x -> x.isSubSignatureOf( m ) )
 					)
-					.filter( m ->
-							// Simply put: Don't inherit a method from D if another parent D2 overrides it.
-							// For every class or interface D2 in extendedClassesOrInterfaces(), check every method m2
-							// in D2 where m != m2 and D != D2. If m2 overrides m from D2, don't inherit m.
-							extendedClassesOrInterfaces()
-									.filter( D2 -> !D2.isEquivalentTo( m.declarationContext() ) )
-									.flatMap( GroundReferenceType::methods )
-									.filter( m2 -> !m2.equals( m ) )
-										// TODO Override the equals method for HigherCallable.Proxy
-									.noneMatch( m2 -> m2.declarationContext().overrides( m2, m ) )
-										// TODO Might want to profile this and create a mapping from m to its
-										//  overriders
-					)
+					.filter( m -> !overriddenByAnother.contains( m ) )
 					.forEach( inheritedMethods::add );
 
-			//// COMPUTE OVERRIDDEN METHODS AND CHECK REQUIREMENTS
 
-			// Collect all methods visible in ancestor types, deduplicated by identity.
-			// Use distinct() here because the same HigherMethod instance can be reachable
-			// via multiple inheritance paths.
-			List< Member.HigherMethod > ancestorMethods = extendedClassesOrInterfaces()
-					.flatMap( GroundReferenceType::methods )
-					.distinct()
-					.collect( Collectors.toList() );
+			//// CHECK OVERRIDE REQUIREMENTS AND ERASURE CLASHES
 
-			methods().forEach( mC ->
-					ancestorMethods.stream()
-							.filter( mA -> this.overrides( mC, mA ) )
-							.forEach( mA -> checkOverrideRequirementsOrThrow( mC, mA ) )
-			);
+			// (JLS 8.4.8) For each declared method mC, check override requirements against any
+			// ancestor method it overrides, and detect erasure clashes. These two checks iterate
+			// the same (declared × ancestor) pairs, so they are fused into a single pass here.
+			methods().forEach( mC -> {
+				for ( Member.HigherMethod mA : ancestorsByName.getOrDefault( mC.identifier(), List.of() ) ) {
+					if ( this.overrides( mC, mA ) ) {
+						checkOverrideRequirementsOrThrow( mC, mA );
+					}
+					// (JLS 8.4.8.3) It is a compile-time error if a type declaration C has a member
+					// method mC and there exists a method mA declared in C or a supertype of C such
+					// that all of the following are true:
+					// • mA and mC have the same name.
+					// • mA is accessible from C.
+					// • The signature of mC is not a subsignature (§8.4.2) of the signature of mA.
+					// • The signature of mC or some method mC overrides (directly or indirectly)
+					//   has the same erasure as the signature of mA or some method mA overrides
+					//   (directly or indirectly).
+					if ( mA.isAccessibleFrom( this )
+							&& !mC.isSubSignatureOf( mA )
+							&& mC.sameErasureAs( mA ) ) {
+						throw new StaticVerificationException(
+								"method '" + mC + "' in '" + this + "' clashes with method '"
+										+ mA + "' in '" + mA.declarationContext()
+										+ "', both methods have the same erasure" );
+					}
+				}
+			} );
 
-			checkErasureClashesOrThrow( ancestorMethods );
+			// (JLS 8.4.8.4) It is possible for a class to inherit multiple methods with
+			// override-equivalent signatures.
+			//
+			// Rule A: It is a compile-time error if a class C inherits a concrete method whose
+			// signature is override-equivalent with another method inherited by C.
+			//
+			// Rule B: It is a compile-time error if a class C inherits a default method whose
+			// signature is override-equivalent with another method inherited by C, UNLESS there
+			// exists an abstract method declared in a superclass (not just a superinterface) of C
+			// and inherited by C that is override-equivalent with the two methods. In that case,
+			// C is necessarily abstract and is considered to inherit all the methods.
 
-			// (JLS 8.4.8.4) Check for conflicts among inherited methods with override-equivalent signatures.
-			checkInheritedConflictsOrThrow();
+			// Precompute the set of inherited methods that are abstract and declared in a class.
+			var abstractFromClass = inheritedMethods.stream()
+					.filter( m -> m.isAbstract() && m.declarationContext().isClass() )
+					.toList();
+
+			for( int i = 0; i < inheritedMethods.size(); i++ ) {
+				Member.HigherMethod m1 = inheritedMethods.get( i );
+				for( int j = i + 1; j < inheritedMethods.size(); j++ ) {
+					Member.HigherMethod m2 = inheritedMethods.get( j );
+					if( !m1.isOverrideEquivalentTo( m2 ) ) continue;
+
+					// Rule A: concrete conflict
+					if( m1.isConcrete() || m2.isConcrete() ) {
+						throw new StaticVerificationException(
+								"class '" + this + "' inherits two override-equivalent methods '"
+										+ m1 + "' from '" + m1.declarationContext()
+										+ "' and '" + m2 + "' from '" + m2.declarationContext() + "'" );
+					}
+
+					// Rule B: default-default conflict (abstract-default pairs are fine)
+					if( m1.isDefault() && m2.isDefault() ) {
+						boolean hasAbstractFromSuperclass = abstractFromClass.stream()
+								.filter( m3 -> m3 != m1 && m3 != m2 )
+								.anyMatch( m3 -> m3.isOverrideEquivalentTo( m1 ) );
+						if( !hasAbstractFromSuperclass ) {
+							throw new StaticVerificationException(
+									"class '" + this + "' inherits two override-equivalent default methods '"
+											+ m1 + "' from '" + m1.declarationContext()
+											+ "' and '" + m2 + "' from '" + m2.declarationContext() + "'" );
+						}
+					}
+				}
+			}
 
 			interfaceFinalised = true;
 		}
@@ -374,74 +444,6 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 				return false;
 			}
 
-		}
-
-		private void checkInheritedConflictsOrThrow() {
-			// (JLS 8.4.8.4) It is possible for a class to inherit multiple methods with
-			// override-equivalent signatures.
-			//
-			// Rule A: It is a compile-time error if a class C inherits a concrete method whose
-			// signature is override-equivalent with another method inherited by C.
-			//
-			// Rule B: It is a compile-time error if a class C inherits a default method whose
-			// signature is override-equivalent with another method inherited by C, UNLESS there
-			// exists an abstract method declared in a superclass (not just a superinterface) of C
-			// and inherited by C that is override-equivalent with the two methods. In that case,
-			// C is necessarily abstract and is considered to inherit all the methods.
-			for( int i = 0; i < inheritedMethods.size(); i++ ) {
-				Member.HigherMethod m1 = inheritedMethods.get( i );
-				for( int j = i + 1; j < inheritedMethods.size(); j++ ) {
-					Member.HigherMethod m2 = inheritedMethods.get( j );
-					if( !m1.isOverrideEquivalentTo( m2 ) ) continue;
-
-					// Rule A: concrete conflict
-					if( m1.isConcrete() || m2.isConcrete() ) {
-						throw new StaticVerificationException(
-								"class '" + this + "' inherits two override-equivalent methods '"
-										+ m1 + "' from '" + m1.declarationContext()
-										+ "' and '" + m2 + "' from '" + m2.declarationContext() + "'" );
-					}
-
-					// Rule B: default-default conflict (abstract-default pairs are fine)
-					if( m1.isDefault() && m2.isDefault() ) {
-						boolean hasAbstractFromSuperclass = inheritedMethods.stream()
-								.filter( m3 -> m3 != m1 && m3 != m2 )
-								.filter( m3 -> m3.isAbstract() && m3.declarationContext().isClass() )
-								.anyMatch( m3 -> m3.isOverrideEquivalentTo( m1 ) );
-						if( !hasAbstractFromSuperclass ) {
-							throw new StaticVerificationException(
-									"class '" + this + "' inherits two override-equivalent default methods '"
-											+ m1 + "' from '" + m1.declarationContext()
-											+ "' and '" + m2 + "' from '" + m2.declarationContext() + "'" );
-						}
-					}
-				}
-			}
-		}
-
-		private void checkErasureClashesOrThrow( List< Member.HigherMethod > ancestorMethods ) {
-			// (JLS 8.4.8.3) It is a compile-time error if T has a member method m1 and there exists
-			// a method m2 declared in T or a supertype of T such that all of the following are true:
-			// - m1 and m2 have the same name
-			// - m2 is accessible from T
-			// - The signature of m1 is NOT a subsignature of m2
-			// - The signature of m1 (or some method m1 overrides) has the same erasure as the
-			//   signature of m2 (or some method m2 overrides).
-			declaredMethods().forEach( m1 ->
-					ancestorMethods.stream()
-							.filter( m2 -> m2 != m1 )
-							.filter( m2 -> m1.identifier().equals( m2.identifier() ) )
-							.filter( m2 -> m2.isAccessibleFrom( this ) )
-							.filter( m2 -> !m1.isSubSignatureOf( m2 ) )
-							.filter( m2 -> m1.sameErasureAs( m2 ) )
-							.findFirst()
-							.ifPresent( m2 -> {
-								throw new StaticVerificationException(
-										"method '" + m1 + "' in '" + this + "' clashes with method '"
-												+ m2 + "' in '" + m2.declarationContext()
-												+ "', both methods have the same erasure" );
-							} )
-			);
 		}
 
 		private void checkOverrideRequirementsOrThrow(Member.HigherMethod child, Member.HigherMethod parent) {
