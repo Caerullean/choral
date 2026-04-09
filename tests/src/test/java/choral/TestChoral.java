@@ -156,6 +156,8 @@ public class TestChoral {
 		mustFail.addSources("IncompatibleReturnType", subFolder(TYPER_FAIL, "IncompatibleReturnType"));
 		mustFail.addSources("PrivateMethodNotInherited", subFolder(TYPER_FAIL, "PrivateMethodNotInherited"));
 		mustFail.addSources("PeerOverridePackagePrivate", subFolder(TYPER_FAIL, "PeerOverridePackagePrivate"));
+		mustFail.addSources("OverrideEquivalentDeclarations", subFolder(TYPER_FAIL, "OverrideEquivalentDeclarations"));
+		mustFail.addSources("AbstractMethodInNonAbstractClass", subFolder(TYPER_FAIL, "AbstractMethodInNonAbstractClass"));
 
 		return Stream.concat(
 				mustPass.build().map(request ->

@@ -221,6 +221,9 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 			extendedClassesOrInterfaces().flatMap( GroundReferenceType::fields )
 					.filter( x -> x.isAccessibleFrom( this )
 							&& declaredFields().noneMatch( y -> x.identifier().equals( y.identifier() ) ) )
+					// The same public static final field could be inherited from multiple
+					// interfaces, but we only want to inherit it once.
+					.distinct()
 					.forEach( inheritedFields::add );
 
 			//////// COMPUTE INHERITED METHODS
@@ -269,7 +272,21 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 					)
 					.forEach( inheritedMethods::add );
 
-			computeOverrides();
+			//// COMPUTE OVERRIDDEN METHODS AND CHECK REQUIREMENTS
+
+			// Collect all methods visible in ancestor types, deduplicated by identity.
+			// Use distinct() here because the same HigherMethod instance can be reachable
+			// via multiple inheritance paths; we only want to check each pair once.
+			List< Member.HigherMethod > ancestorMethods = extendedClassesOrInterfaces()
+					.flatMap( GroundReferenceType::methods )
+					.distinct()
+					.collect( Collectors.toList() );
+
+			methods().forEach( mC ->
+					ancestorMethods.stream()
+							.filter( mA -> this.overrides( mC, mA ) )
+							.forEach( mA -> checkOverrideRequirementsOrThrow( mC, mA ) )
+			);
 
 			interfaceFinalised = true;
 		}
@@ -352,22 +369,6 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 				return false;
 			}
 
-		}
-
-		private void computeOverrides() {
-			// Collect all methods visible in ancestor types, deduplicated by identity.
-			// Use distinct() here because the same HigherMethod instance can be reachable
-			// via multiple inheritance paths; we only want to check each pair once.
-			List< Member.HigherMethod > ancestorMethods = extendedClassesOrInterfaces()
-					.flatMap( GroundReferenceType::methods )
-					.distinct()
-					.collect( Collectors.toList() );
-
-			methods().forEach( mC ->
-					ancestorMethods.stream()
-							.filter( mA -> this.overrides( mC, mA ) )
-							.forEach( mA -> checkOverrideRequirementsOrThrow( mC, mA ) )
-			);
 		}
 
 		private void checkOverrideRequirementsOrThrow(Member.HigherMethod child, Member.HigherMethod parent) {
