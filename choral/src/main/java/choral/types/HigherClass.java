@@ -287,11 +287,6 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 		 */
 		@Override
 		public boolean overrides( Member.HigherMethod mC, Member.HigherMethod mA ) {
-
-			// TODO We'll need to compute the overrides relation anyway (e.g. when computing inherited methods for this
-			//  type's descendants) So let's eagerly search all the methods in mC to compute this.
-			//  For each method in mC and for each method declared in a parent class or interface, compute:
-
 			// (JLS 8.4.8.1) An instance method mC declared in or inherited by class C, overrides from C another method
 			// mA declared in an *interface* A, iff all of the following are true:
 			// 1. A is a superinterface of C.
@@ -360,8 +355,6 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 		}
 
 		private void computeOverrides() {
-
-			// TODO search all ancestors, not just direct ancestors
 			// Collect all methods visible in ancestor types, deduplicated by identity.
 			// Use distinct() here because the same HigherMethod instance can be reachable
 			// via multiple inheritance paths; we only want to check each pair once.

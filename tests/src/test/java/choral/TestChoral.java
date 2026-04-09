@@ -143,6 +143,8 @@ public class TestChoral {
 		mustPass.addSources("ProtectedMethodInherited", subFolder(TYPER_PASS, "ProtectedMethodInherited"));
 		mustPass.addSources("PublicMethodAccessibleFromOutside", subFolder(TYPER_PASS, "PublicMethodAccessibleFromOutside"));
 		mustPass.addSources("PrivateDeclaredPublic", subFolder(TYPER_PASS, "PrivateDeclaredPublic"));
+		mustPass.addSources("OverrideInSubclass", subFolder(TYPER_PASS, "OverrideInSubclass"));
+		mustPass.addSources("PeerOverriding", subFolder(TYPER_PASS, "PeerOverriding"));
 
 		CompilationRequestBuilder mustFail = new CompilationRequestBuilder();
 		mustFail.addSources("InstanceOverridesStatic", subFolder(TYPER_FAIL, "InstanceOverridesStatic"));
@@ -153,6 +155,7 @@ public class TestChoral {
 		mustFail.addSources("OverrideFinal", subFolder(TYPER_FAIL, "OverrideFinal"));
 		mustFail.addSources("IncompatibleReturnType", subFolder(TYPER_FAIL, "IncompatibleReturnType"));
 		mustFail.addSources("PrivateMethodNotInherited", subFolder(TYPER_FAIL, "PrivateMethodNotInherited"));
+		mustFail.addSources("PeerOverridePackagePrivate", subFolder(TYPER_FAIL, "PeerOverridePackagePrivate"));
 
 		return Stream.concat(
 				mustPass.build().map(request ->
