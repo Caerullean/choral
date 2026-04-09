@@ -438,13 +438,13 @@ public abstract class HigherClassOrInterface extends HigherReferenceType
 
 		public abstract void finaliseInterface();
 
-		protected final List< Member.Field > inheritedFields = new LinkedList<>();
+		protected final ArrayList< Member.Field > inheritedFields = new ArrayList<>();
 
-		protected final List< Member.HigherMethod > inheritedMethods = new LinkedList<>();
+		protected final ArrayList< Member.HigherMethod > inheritedMethods = new ArrayList<>();
 
-		protected final List< Member.Field > declaredFields = new ArrayList<>();
+		protected final ArrayList< Member.Field > declaredFields = new ArrayList<>();
 
-		protected final List< Member.HigherMethod > declaredMethods = new ArrayList<>();
+		protected final ArrayList< Member.HigherMethod > declaredMethods = new ArrayList<>();
 
 		@Override
 		public final Stream< Member.Field > declaredFields() {

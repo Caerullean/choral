@@ -159,6 +159,14 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 			return Optional.ofNullable( extendedClass );
 		}
 
+		/**
+		 * Returns the strict superclasses of this class in ascending order (starting from the direct superclass).
+		 */
+		private Stream< GroundClass > strictSuperclasses() {
+			if ( extendedClass == null ) return Stream.empty();
+			return Stream.iterate( extendedClass, Objects::nonNull, d -> d.extendedClass().orElse( null ) );
+		}
+
 		@Override
 		public final Stream< ? extends GroundClassOrInterface > extendedClassesOrInterfaces() {
 			if( extendedClass == null ) {
@@ -297,14 +305,6 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 		}
 
 		/**
-		 * Returns the strict superclasses of this class in ascending order (starting from the direct superclass).
-		 */
-		private Stream< GroundClass > strictSuperclasses() {
-			if ( extendedClass == null ) return Stream.empty();
-			return Stream.iterate( extendedClass, Objects::nonNull, d -> d.extendedClass().orElse( null ) );
-		}
-
-		/**
 		 * Returns true iff mC overrides mA from this class. See JLS 8.4.8.1 for details.
 		 */
 		@Override
@@ -388,11 +388,10 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 			// exists an abstract method declared in a superclass (not just a superinterface) of C
 			// and inherited by C that is override-equivalent with the two methods. In that case,
 			// C is necessarily abstract and is considered to inherit all the methods.
-			List< Member.HigherMethod > methods = new ArrayList<>( inheritedMethods );
-			for( int i = 0; i < methods.size(); i++ ) {
-				Member.HigherMethod m1 = methods.get( i );
-				for( int j = i + 1; j < methods.size(); j++ ) {
-					Member.HigherMethod m2 = methods.get( j );
+			for( int i = 0; i < inheritedMethods.size(); i++ ) {
+				Member.HigherMethod m1 = inheritedMethods.get( i );
+				for( int j = i + 1; j < inheritedMethods.size(); j++ ) {
+					Member.HigherMethod m2 = inheritedMethods.get( j );
 					if( !m1.isOverrideEquivalentTo( m2 ) ) continue;
 
 					// Rule A: concrete conflict
@@ -405,7 +404,7 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 
 					// Rule B: default-default conflict (abstract-default pairs are fine)
 					if( m1.isDefault() && m2.isDefault() ) {
-						boolean hasAbstractFromSuperclass = methods.stream()
+						boolean hasAbstractFromSuperclass = inheritedMethods.stream()
 								.filter( m3 -> m3 != m1 && m3 != m2 )
 								.filter( m3 -> m3.isAbstract() && m3.declarationContext().isClass() )
 								.anyMatch( m3 -> m3.isOverrideEquivalentTo( m1 ) );
