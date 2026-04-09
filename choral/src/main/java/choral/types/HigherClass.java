@@ -276,7 +276,7 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 
 			// Collect all methods visible in ancestor types, deduplicated by identity.
 			// Use distinct() here because the same HigherMethod instance can be reachable
-			// via multiple inheritance paths; we only want to check each pair once.
+			// via multiple inheritance paths.
 			List< Member.HigherMethod > ancestorMethods = extendedClassesOrInterfaces()
 					.flatMap( GroundReferenceType::methods )
 					.distinct()
@@ -288,17 +288,10 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 							.forEach( mA -> checkOverrideRequirementsOrThrow( mC, mA ) )
 			);
 
-			// (JLS 8.4.8.3) It is a compile-time error if T has a member method m1 and there exists
-			// a method m2 declared in T or a supertype of T such that all of the following are true:
-			// - m1 and m2 have the same name
-			// - m2 is accessible from T
-			// - The signature of m1 is NOT a subsignature of m2
-			// - The signature of m1 (or some method m1 overrides) has the same erasure as the
-			//   signature of m2 (or some method m2 overrides).
-			// The within-class case (two declared methods with same erasure) is already caught by
-			// addMethod. Here we catch the cross-class case: a declared method clashes with an
-			// accessible inherited method that has the same erasure.
 			checkErasureClashesOrThrow( ancestorMethods );
+
+			// (JLS 8.4.8.4) Check for conflicts among inherited methods with override-equivalent signatures.
+			checkInheritedConflictsOrThrow();
 
 			interfaceFinalised = true;
 		}
@@ -383,7 +376,58 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 
 		}
 
+		private void checkInheritedConflictsOrThrow() {
+			// (JLS 8.4.8.4) It is possible for a class to inherit multiple methods with
+			// override-equivalent signatures.
+			//
+			// Rule A: It is a compile-time error if a class C inherits a concrete method whose
+			// signature is override-equivalent with another method inherited by C.
+			//
+			// Rule B: It is a compile-time error if a class C inherits a default method whose
+			// signature is override-equivalent with another method inherited by C, UNLESS there
+			// exists an abstract method declared in a superclass (not just a superinterface) of C
+			// and inherited by C that is override-equivalent with the two methods. In that case,
+			// C is necessarily abstract and is considered to inherit all the methods.
+			List< Member.HigherMethod > methods = new ArrayList<>( inheritedMethods );
+			for( int i = 0; i < methods.size(); i++ ) {
+				Member.HigherMethod m1 = methods.get( i );
+				for( int j = i + 1; j < methods.size(); j++ ) {
+					Member.HigherMethod m2 = methods.get( j );
+					if( !m1.isOverrideEquivalentTo( m2 ) ) continue;
+
+					// Rule A: concrete conflict
+					if( m1.isConcrete() || m2.isConcrete() ) {
+						throw new StaticVerificationException(
+								"class '" + this + "' inherits two override-equivalent methods '"
+										+ m1 + "' from '" + m1.declarationContext()
+										+ "' and '" + m2 + "' from '" + m2.declarationContext() + "'" );
+					}
+
+					// Rule B: default-default conflict (abstract-default pairs are fine)
+					if( m1.isDefault() && m2.isDefault() ) {
+						boolean hasAbstractFromSuperclass = methods.stream()
+								.filter( m3 -> m3 != m1 && m3 != m2 )
+								.filter( m3 -> m3.isAbstract() && m3.declarationContext().isClass() )
+								.anyMatch( m3 -> m3.isOverrideEquivalentTo( m1 ) );
+						if( !hasAbstractFromSuperclass ) {
+							throw new StaticVerificationException(
+									"class '" + this + "' inherits two override-equivalent default methods '"
+											+ m1 + "' from '" + m1.declarationContext()
+											+ "' and '" + m2 + "' from '" + m2.declarationContext() + "'" );
+						}
+					}
+				}
+			}
+		}
+
 		private void checkErasureClashesOrThrow( List< Member.HigherMethod > ancestorMethods ) {
+			// (JLS 8.4.8.3) It is a compile-time error if T has a member method m1 and there exists
+			// a method m2 declared in T or a supertype of T such that all of the following are true:
+			// - m1 and m2 have the same name
+			// - m2 is accessible from T
+			// - The signature of m1 is NOT a subsignature of m2
+			// - The signature of m1 (or some method m1 overrides) has the same erasure as the
+			//   signature of m2 (or some method m2 overrides).
 			declaredMethods().forEach( m1 ->
 					ancestorMethods.stream()
 							.filter( m2 -> m2 != m1 )

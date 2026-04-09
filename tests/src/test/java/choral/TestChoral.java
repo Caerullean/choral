@@ -145,6 +145,7 @@ public class TestChoral {
 		mustPass.addSources("PrivateDeclaredPublic", subFolder(TYPER_PASS, "PrivateDeclaredPublic"));
 		mustPass.addSources("OverrideInSubclass", subFolder(TYPER_PASS, "OverrideInSubclass"));
 		mustPass.addSources("PeerOverriding", subFolder(TYPER_PASS, "PeerOverriding"));
+		mustPass.addSources("InheritedDefaultDefaultWithAbstractSuperclass", subFolder(TYPER_PASS, "InheritedDefaultDefaultWithAbstractSuperclass"));
 
 		CompilationRequestBuilder mustFail = new CompilationRequestBuilder();
 		mustFail.addSources("InstanceOverridesStatic", subFolder(TYPER_FAIL, "InstanceOverridesStatic"));
@@ -159,6 +160,8 @@ public class TestChoral {
 		mustFail.addSources("OverrideEquivalentDeclarations", subFolder(TYPER_FAIL, "OverrideEquivalentDeclarations"));
 		mustFail.addSources("ErasureClashSameClass", subFolder(TYPER_FAIL, "ErasureClashSameClass"));
 		mustFail.addSources("ErasureClashInherited", subFolder(TYPER_FAIL, "ErasureClashInherited"));
+		mustFail.addSources("InheritedDefaultDefaultConflict", subFolder(TYPER_FAIL, "InheritedDefaultDefaultConflict"));
+		mustFail.addSources("InheritedDefaultDefaultAbstractFromInterface", subFolder(TYPER_FAIL, "InheritedDefaultDefaultAbstractFromInterface"));
 		mustFail.addSources("AbstractMethodInNonAbstractClass", subFolder(TYPER_FAIL, "AbstractMethodInNonAbstractClass"));
 
 		return Stream.concat(
