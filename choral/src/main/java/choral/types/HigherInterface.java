@@ -170,14 +170,70 @@ public final class HigherInterface extends HigherClassOrInterface implements Int
 				return;
 			}
 
-			// TODO
+			//////// COMPUTE INHERITED FIELDS
+
+			extendedClassesOrInterfaces().flatMap( GroundReferenceType::fields )
+					.filter( x -> x.isAccessibleFrom( this )
+							&& declaredFields().noneMatch( y -> x.identifier().equals( y.identifier() ) ) )
+					// The same public static final field could be inherited from multiple
+					// interfaces, but we only want to inherit it once.
+					.distinct()
+					.forEach( inheritedFields::add );
+
+
+			//////// COMPUTE INHERITED METHODS
+
+			// Precompute the set of methods defined in direct superclasses and interfaces.
+			var allAncestorMethods = extendedClassesOrInterfaces()
+					.flatMap( GroundReferenceType::methods )
+					.distinct()
+					.toList();
+
+			// Precompute the set of ancestor methods that are overridden by some other ancestor.
+			Set< Member.HigherMethod > overriddenByAnother =
+					Collections.newSetFromMap( new IdentityHashMap<>() );
+			for ( Member.HigherMethod m : allAncestorMethods ) {
+				for ( Member.HigherMethod m2 : allAncestorMethods ) {
+					if ( m2.equals( m ) ) continue;  // TODO: Implement equality for proxy callables
+					if ( m2.declarationContext().isEquivalentTo( m.declarationContext() ) ) continue;
+					if ( m2.declarationContext().overrides( m2, m ) ) {
+						overriddenByAnother.add( m );
+						break; // m is already marked; no further m2 needed
+					}
+				}
+			}
+
+			// (JLS 9.4.1) An interface I inherits from its direct superinterfaces all abstract and
+			// default methods m for which all of the following are true:
+			// • m is a member of a direct superinterface, J, of I.
+			// • No method declared in I has a signature that is a subsignature (§8.4.2) of the
+			// signature of m.
+			// • There exists no method m' that is a member of a direct superinterface, J', of I
+			// (m distinct from m', J distinct from J'), such that m' overrides from J' the
+			// declaration of the method m.
+			allAncestorMethods.stream()
+					.filter( m -> m.isAbstract() || m.isDefault() )
+					.filter( m -> m.isAccessibleFrom( this ) )
+					.filter( m -> declaredMethods().noneMatch( x -> x.isSubSignatureOf( m ) ) )
+					.filter( m -> !overriddenByAnother.contains( m ) )
+					.forEach( inheritedMethods::add );
+
+			// TODO: If an interface I declares a static method m, and the signature of m is a
+			//  subsignature of an instance method m' in a superinterface of I, and m' would
+			//  otherwise be accessible to code in I, then a compile-time error occurs.
+
 
 			interfaceFinalised = true;
 		}
 
 		@Override
 		public boolean overrides(Member.HigherMethod m1, Member.HigherMethod m2) {
-			return false; // TODO
+			// (JLS 9.4.1.1) An instance method m1, declared in or inherited by an interface I,
+			// overrides from I another instance method, m2, declared in interface J, iff both of
+			// the following are true:
+			// • I is a subinterface of J.
+			// • The signature of m1 is a subsignature (§8.4.2) of the signature of m2.
+			return isSubtypeOf( m2.declarationContext() ) && m1.isSubSignatureOf( m2 );
 		}
 
 	}

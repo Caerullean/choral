@@ -225,7 +225,8 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 				}
 			}
 
-			// (JLS 8.3) Inherit fields from direct superclasses and superinterfaces
+			//////// COMPUTE INHERITED FIELDS
+
 			extendedClassesOrInterfaces().flatMap( GroundReferenceType::fields )
 					.filter( x -> x.isAccessibleFrom( this )
 							&& declaredFields().noneMatch( y -> x.identifier().equals( y.identifier() ) ) )
@@ -233,6 +234,7 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 					// interfaces, but we only want to inherit it once.
 					.distinct()
 					.forEach( inheritedFields::add );
+
 
 			//////// COMPUTE INHERITED METHODS
 
