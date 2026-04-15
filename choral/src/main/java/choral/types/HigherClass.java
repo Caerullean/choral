@@ -299,6 +299,7 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 
 			//// CHECK OVERRIDE REQUIREMENTS AND ERASURE CLASHES
 
+			/*
 			// (JLS 8.4.8) For each declared method mC, check override requirements against any
 			// ancestor method it overrides, and detect erasure clashes. These two checks iterate
 			// the same (declared × ancestor) pairs, so they are fused into a single pass here.
@@ -372,6 +373,7 @@ public class HigherClass extends HigherClassOrInterface implements Class {
 					}
 				}
 			}
+		    */
 
 			interfaceFinalised = true;
 		}
