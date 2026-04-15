@@ -150,6 +150,7 @@ public class TestChoral {
 		mustPass.addSources("DualJavaImport", subFolder(TYPER_PASS, "DualJavaImport"));
 		mustPass.addSources("StandardLibraryReduction", subFolder(TYPER_PASS, "StandardLibraryReduction"));
 		mustPass.addSources("DefaultOverridesDefault", subFolder(TYPER_PASS,"DefaultOverridesDefault"));
+		mustPass.addSources("ReturnTypeSubstitutable", subFolder(TYPER_PASS,"ReturnTypeSubstitutable"));
 		CompilationRequestBuilder mustFail = new CompilationRequestBuilder();
 		mustFail.addSources("InstanceOverridesStatic", subFolder(TYPER_FAIL, "InstanceOverridesStatic"));
 		mustFail.addSources("StaticOverridesInstance", subFolder(TYPER_FAIL, "StaticOverridesInstance"));
