@@ -146,7 +146,10 @@ public class TestChoral {
 		mustPass.addSources("OverrideInSubclass", subFolder(TYPER_PASS, "OverrideInSubclass"));
 		mustPass.addSources("PeerOverriding", subFolder(TYPER_PASS, "PeerOverriding"));
 		mustPass.addSources("InheritedDefaultDefaultWithAbstractSuperclass", subFolder(TYPER_PASS, "InheritedDefaultDefaultWithAbstractSuperclass"));
-
+		mustPass.addSources("ClassLifterIntegration", subFolder(TYPER_PASS,"ClassLifterIntegration"));
+		mustPass.addSources("DualJavaImport", subFolder(TYPER_PASS, "DualJavaImport"));
+		mustPass.addSources("StandardLibraryReduction", subFolder(TYPER_PASS, "StandardLibraryReduction"));
+		mustPass.addSources("DefaultOverridesDefault", subFolder(TYPER_PASS,"DefaultOverridesDefault"));
 		CompilationRequestBuilder mustFail = new CompilationRequestBuilder();
 		mustFail.addSources("InstanceOverridesStatic", subFolder(TYPER_FAIL, "InstanceOverridesStatic"));
 		mustFail.addSources("StaticOverridesInstance", subFolder(TYPER_FAIL, "StaticOverridesInstance"));
